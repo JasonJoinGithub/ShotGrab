@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>截图库 — 电影参考帧检索</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">▣</span>
+    <div>
+      <h1>截图库</h1>
+      <p class="subtitle">输入场景描述，找回电影里的参考帧</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="creditsBadge" class="credits" title="FrameThrower 点数余额">点数：—</span>
+    <button id="settingsBtn" class="btn btn-ghost" type="button">设置</button>
+  </div>
+</header>
+
+<!-- 无 token 时的设置引导 -->
+<section id="setupGuide" class="setup-guide hidden">
+  <h2>先花一分钟，把 API 接上</h2>
+  <p>截图库通过 FrameThrower 官方接口搜索影片参考帧，需要你自己的免费账号 token（新账号送 200 点，搜一次花 2 点，不用绑卡）。</p>
+  <ol>
+    <li>打开 <a href="https://framethrower.ai/" target="_blank" rel="noopener">framethrower.ai</a>，用 Google 或邮箱免费注册并登录。</li>
+    <li>进 <strong>Settings → API</strong>，点 <strong>+ Create token</strong> 创建一个 token（只显示一次）。</li>
+    <li>把 token 粘贴到下面，点「保存并开始用」。它只保存在你这台 Mac 的程序目录里（.token 文件，仅你本人可读），不会发给任何别的地方。</li>
+  </ol>
+  <div class="token-row">
+    <input id="setupTokenInput" type="password" placeholder="粘贴 FrameThrower API token" autocomplete="off" spellcheck="false">
+    <button id="setupTokenSave" class="btn btn-primary" type="button">保存并开始用</button>
+  </div>
+  <p id="setupTokenMsg" class="msg"></p>
+</section>
+
+<nav class="tabs">
+  <button id="tabSearch" class="tab active" type="button">搜索参考帧</button>
+  <button id="tabScript" class="tab" type="button">剧本找场景</button>
+  <button id="tabCollection" class="tab" type="button">我的收藏 <span id="collectionCount" class="count">0</span></button>
+</nav>
+
+<main>
+  <!-- 搜索页 -->
+  <section id="searchPage" class="page">
+    <div class="search-box">
+      <input id="queryInput" type="text" placeholder="比如：雨夜霓虹街道 逆光 中景 —— 中文英文都能输" autocomplete="off">
+      <button id="searchBtn" class="btn btn-primary" type="button">搜索</button>
+    </div>
+    <p id="queryPreview" class="query-preview hidden"></p>
+    <p class="cost-hint">每次搜索花 2 点；点一张帧看详情花 2 点；找相似花 2 点。</p>
+
+    <div class="multisite">
+      <p class="chips-title">其他站也搜搜（免费，不花点）：</p>
+      <div class="row multisite-row">
+        <a class="btn disabled" id="msFilmGrab" href="#" target="_blank" rel="noopener" aria-disabled="true">FilmGrab · 按片名</a>
+        <a class="btn disabled" id="msShotCafe" href="#" target="_blank" rel="noopener" aria-disabled="true">Shot.Cafe · 按标签</a>
+        <a class="btn disabled" id="msMovieStills" href="#" target="_blank" rel="noopener" aria-disabled="true">MovieStillsDB · 按片名/人名</a>
+      </div>
+      <p class="muted" id="multisiteHint">在上面输入片名或描述后，这里自动带上你的查询词（免费，不花点；片名用英文效果最好）。</p>
+      <div class="row multisite-row">
+        <a class="btn btn-ghost" href="https://app.flim.ai/" target="_blank" rel="noopener">Flim · 点开手动搜</a>
+        <a class="btn btn-ghost" href="https://frameset.app/" target="_blank" rel="noopener">Frameset · 点开手动搜</a>
+        <a class="btn btn-ghost" href="https://shotdeck.com/" target="_blank" rel="noopener">ShotDeck · 需付费账号</a>
+        <a class="btn btn-ghost" href="https://therefs.org/" target="_blank" rel="noopener">/refs · 点开手动搜</a>
+        <a class="btn btn-ghost" href="https://ceeniq.com/" target="_blank" rel="noopener">Ceeniq · 上传剧照做拆解</a>
+      </div>
+      <p class="muted">Flim、Frameset、ShotDeck、/refs 没有可预填的搜索链接，只能点开手动搜；Ceeniq 是拆解工具不是图库。/refs 的官方接口在测试中，开放后可以接进来（等候名单：<a href="https://therefs.org/api" target="_blank" rel="noopener">therefs.org/api</a>）。</p>
+    </div>
+
+    <div class="chips-wrap">
+      <p class="chips-title">摄影术语（点一下，加进查询框）：</p>
+      <div id="chipsContainer"></div>
+    </div>
+
+    <p id="searchStatus" class="status"></p>
+    <div id="resultsGrid" class="grid"></div>
+  </section>
+
+  <!-- 剧本模式 -->
+  <section id="scriptPage" class="page hidden">
+    <p class="muted">粘一段剧本（场景描写、动作段落都行），程序先拆出时间、地点、人物、动作、情绪，再用这些去电影里找最像的场景。匹配帧的提示词可以直接复制，去出场景图、人物图、气氛图。</p>
+    <textarea id="scriptInput" class="script-input" rows="5" placeholder="比如：深夜，雨夜的街道，一个穿大衣的男人独自走在霓虹灯下，孤独而警觉……"></textarea>
+    <div class="row">
+      <button id="scriptParseBtn" class="btn btn-primary" type="button">拆解场景（免费）</button>
+      <button id="scriptSearchBtn" class="btn" type="button" disabled>按拆解结果去搜</button>
+    </div>
+    <div id="scriptParsed" class="script-parsed hidden"></div>
+    <p id="scriptStatus" class="status"></p>
+    <div id="scriptGrid" class="grid"></div>
+  </section>
+
+  <!-- 收藏页 -->
+  <section id="collectionPage" class="page hidden">
+    <div class="collection-tools">
+      <select id="projectFilter" aria-label="按项目筛选">
+        <option value="">全部项目</option>
+      </select>
+      <input id="tagFilter" type="text" placeholder="按标签筛选，比如：雨夜">
+      <input id="collectionSearch" type="text" placeholder="在收藏里搜片名、描述…">
+      <button id="exportBtn" class="btn btn-ghost" type="button">导出提示词（Markdown）</button>
+    </div>
+    <p id="collectionStatus" class="status"></p>
+    <div id="collectionGrid" class="grid"></div>
+  </section>
+</main>
+
+<!-- 详情弹窗 -->
+<div id="detailModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="帧详情">
+  <div class="modal-backdrop" id="detailBackdrop"></div>
+  <div class="modal-card">
+    <button id="detailClose" class="modal-close" type="button" aria-label="关闭">✕</button>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="设置">
+  <div class="modal-backdrop" id="settingsBackdrop"></div>
+  <div class="modal-card modal-card-small">
+    <button id="settingsClose" class="modal-close" type="button" aria-label="关闭">✕</button>
+    <h2>设置</h2>
+    <p>FrameThrower API token 保存在本机程序目录的 <code>.token</code> 文件里（仅你本人可读），这里不会再显示它。</p>
+    <p id="tokenState" class="msg"></p>
+    <label class="field-label" for="settingsTokenInput">更换 token（粘贴新的）：</label>
+    <input id="settingsTokenInput" type="password" placeholder="粘贴新的 API token" autocomplete="off" spellcheck="false">
+    <div class="row">
+      <button id="settingsTokenSave" class="btn btn-primary" type="button">保存 token</button>
+      <button id="settingsTokenClear" class="btn btn-danger" type="button">清除 token</button>
+    </div>
+    <p id="settingsTokenMsg" class="msg"></p>
+    <hr>
+    <h3>点数</h3>
+    <p id="settingsCredits">余额：—</p>
+    <p class="muted">新账号送 200 点；文字搜索、看详情、找相似各花 2 点；$1 = 1000 点，点数永不过期。余额不足时去 FrameThrower 官网充值。</p>
+    <h3>说明</h3>
+    <p class="muted">缩略图是 FrameThrower 提供的临时链接（约 1 小时过期），收藏里只存链接和文字信息，不下载剧照。想长久保存一张图，请点「在原站打开」，在 FrameThrower 里下载。</p>
+  </div>
+</div>
+
+<!-- 收藏编辑弹窗 -->
+<div id="saveModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="保存到收藏">
+  <div class="modal-backdrop" id="saveBackdrop"></div>
+  <div class="modal-card modal-card-small">
+    <button id="saveClose" class="modal-close" type="button" aria-label="关闭">✕</button>
+    <h2>保存到我的收藏</h2>
+    <p id="saveFrameTitle" class="muted"></p>
+    <label class="field-label" for="saveProject">项目（可选）</label>
+    <input id="saveProject" type="text" placeholder="比如：新片分镜、广告提案" list="projectList">
+    <datalist id="projectList"></datalist>
+    <label class="field-label" for="saveTags">标签（可选，逗号分隔）</label>
+    <input id="saveTags" type="text" placeholder="比如：雨夜，逆光，情绪">
+    <label class="field-label" for="saveNote">备注（可选）</label>
+    <textarea id="saveNote" rows="2" placeholder="这帧好在哪，想怎么用…"></textarea>
+    <div class="row">
+      <button id="saveConfirm" class="btn btn-primary" type="button">保存</button>
+    </div>
+    <p id="saveMsg" class="msg"></p>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/prompt-template.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
